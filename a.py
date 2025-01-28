@@ -5,11 +5,13 @@ import time
 import signal
 import sys
 
+# MongoDB connection
 mongo_client = MongoClient("mongodb://localhost:27017/")
 db = mongo_client["instagram_db"]
 likes_collection = db["likes"]
 comments_collection = db["comments"]
 
+# Instagram connection
 cl = Client()
 username = "test_acccount123"
 password = "testaccaunt123!"
@@ -18,9 +20,9 @@ session_file = "session.json"
 running = True
 
 def signal_handler(sig, frame):
-    """Обработчик для корректного завершения скрипта"""
+    """Handler for graceful script termination"""
     global running
-    print("\nЗавершение мониторинга...")
+    print("\nTerminating monitoring...")
     running = False
     cl.logout()
     mongo_client.close()
@@ -29,29 +31,29 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 def ensure_login():
-    """Функция для проверки и обновления авторизации"""
+    """Function to check and refresh authentication"""
     try:
         if not cl.user_id:
-            print("Выполняем вход в аккаунт...")
+            print("Logging into the account...")
             cl.login(username, password)
             cl.dump_settings(session_file)
-            print("Успешный вход в аккаунт")
+            print("Successfully logged in")
         return True
     except Exception as e:
-        print(f"Ошибка при входе: {e}")
+        print(f"Login error: {e}")
         try:
-            print("Пробуем войти повторно...")
+            print("Retrying login...")
             cl.login(username, password)
             cl.dump_settings(session_file)
-            print("Повторный вход успешен")
+            print("Retry login successful")
             return True
         except Exception as e:
-            print(f"Ошибка при повторном входе: {e}")
+            print(f"Retry login error: {e}")
             return False
 
 def save_initial_likers(media_id):
-    """Сохраняет начальные лайки"""
-    print("Сохранение существующих лайков...")
+    """Saves initial likes"""
+    print("Saving existing likes...")
     try:
         if not ensure_login():
             return set()
@@ -68,19 +70,19 @@ def save_initial_likers(media_id):
             }
             if not likes_collection.find_one({"user_id": user.pk, "media_id": media_id}):
                 likes_collection.insert_one(user_data)
-                print(f"Сохранен пользователь: {user.username}")
+                print(f"User saved: {user.username}")
             else:
-                print(f"Пользователь {user.username} уже существует в базе данных.")
+                print(f"User {user.username} already exists in the database.")
             saved_likers.add(user.pk)
             time.sleep(2)
         return saved_likers
     except Exception as e:
-        print(f"Ошибка при сохранении лайков: {e}")
+        print(f"Error saving likes: {e}")
         return set()
 
 def save_initial_comments(media_id):
-    """Сохраняет начальные комментарии"""
-    print("Сохранение существующих комментариев...")
+    """Saves initial comments"""
+    print("Saving existing comments...")
     try:
         if not ensure_login():
             return None
@@ -101,21 +103,21 @@ def save_initial_comments(media_id):
                 }
                 if not comments_collection.find_one({"comment_id": comment_id, "media_id": media_id}):
                     comments_collection.insert_one(user_data)
-                    print(f"Сохранен комментарий от пользователя: {comment.user.username}")
+                    print(f"Comment saved from user: {comment.user.username}")
                 else:
-                    print(f"Комментарий от {comment.user.username} уже существует в базе данных.")
+                    print(f"Comment from {comment.user.username} already exists in the database.")
                 last_comment_id = max(last_comment_id, comment_id)
             except ValueError as e:
-                print(f"Ошибка при обработке ID комментария: {e}")
+                print(f"Error processing comment ID: {e}")
                 continue
             time.sleep(2)
         return last_comment_id
     except Exception as e:
-        print(f"Ошибка при сохранении комментариев: {e}")
+        print(f"Error saving comments: {e}")
         return 0
 
 def check_new_likers(media_id, known_likers):
-    """Проверяет и сохраняет новых лайкеров"""
+    """Checks and saves new likers"""
     try:
         if not ensure_login():
             return known_likers
@@ -134,16 +136,16 @@ def check_new_likers(media_id, known_likers):
                 }
                 if not likes_collection.find_one({"user_id": user.pk, "media_id": media_id}):
                     likes_collection.insert_one(user_data)
-                    print(f"Новый лайк от пользователя: {user.username}")
+                    print(f"New like from user: {user.username}")
                 new_likers.append(user.pk)
                 
         return known_likers.union(set(new_likers))
     except Exception as e:
-        print(f"Ошибка при проверке новых лайков: {e}")
+        print(f"Error checking new likes: {e}")
         return known_likers
 
 def check_new_comments(media_id, last_comment_id):
-    """Проверяет и сохраняет новые комментарии"""
+    """Checks and saves new comments"""
     try:
         if not ensure_login():
             return last_comment_id
@@ -166,39 +168,39 @@ def check_new_comments(media_id, last_comment_id):
                     }
                     if not comments_collection.find_one({"comment_id": comment_id, "media_id": media_id}):
                         comments_collection.insert_one(user_data)
-                        print(f"Новый комментарий от пользователя: {comment.user.username}")
+                        print(f"New comment from user: {comment.user.username}")
                     new_last_comment_id = comment_id
             except ValueError as e:
-                print(f"Ошибка при обработке ID комментария: {e}")
+                print(f"Error processing comment ID: {e}")
                 continue
                 
         return new_last_comment_id
     except Exception as e:
-        print(f"Ошибка при проверке новых комментариев: {e}")
+        print(f"Error checking new comments: {e}")
         return last_comment_id
 
 def main():
-    """Основная функция"""
+    """Main function"""
     if not ensure_login():
-        print("Не удалось войти в аккаунт. Завершение работы.")
+        print("Failed to log in. Exiting.")
         return
 
-    post_url = input("Введите ссылку на пост Instagram: ")
+    post_url = input("Enter Instagram post URL: ")
     try:
         media_id = cl.media_pk_from_url(post_url)
         
-        # Сохранение начальных данных
+        # Save initial data
         existing_likers = save_initial_likers(media_id)
         last_comment_id = save_initial_comments(media_id)
         
-        print("\nНачинаем мониторинг новых лайков и комментариев...")
+        print("\nStarting monitoring of new likes and comments...")
         while running:
             existing_likers = check_new_likers(media_id, existing_likers)
             last_comment_id = check_new_comments(media_id, last_comment_id)
             time.sleep(30)
 
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Error: {e}")
     finally:
         cl.logout()
         mongo_client.close()
