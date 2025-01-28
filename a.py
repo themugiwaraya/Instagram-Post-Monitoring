@@ -5,13 +5,11 @@ import time
 import signal
 import sys
 
-# Подключение к MongoDB
 mongo_client = MongoClient("mongodb://localhost:27017/")
 db = mongo_client["instagram_db"]
 likes_collection = db["likes"]
 comments_collection = db["comments"]
 
-# Подключение к Instagram
 cl = Client()
 username = "test_acccount123"
 password = "testaccaunt123!"
